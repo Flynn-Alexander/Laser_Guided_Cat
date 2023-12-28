@@ -12,6 +12,7 @@ tqdm = "*"
 ultralytics = "*"
 importlib-resources = "*"
 zipp = "*"
+timm = "==0.6.7"
 
 [dev-packages]
 
