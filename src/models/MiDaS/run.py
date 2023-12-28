@@ -170,7 +170,7 @@ def run(input_path, output_path, model_path, model_type="dpt_beit_large_512", op
     else:
         with torch.no_grad():
             fps = 1
-            video = VideoStream(0).start()
+            video = VideoStream(1).start()
             time_start = time.time()
             frame_index = 0
             while True:

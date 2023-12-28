@@ -33,8 +33,8 @@ def _get_rel_pos_bias(self, window_size):
     old_height = 2 * self.window_size[0] - 1
     old_width = 2 * self.window_size[1] - 1
 
-    new_height = 2 * window_size[0] - 1
-    new_width = 2 * window_size[1] - 1
+    new_height = int(2 * window_size[0] - 1)
+    new_width = int(2 * window_size[1] - 1)
 
     old_relative_position_bias_table = self.relative_position_bias_table
 
