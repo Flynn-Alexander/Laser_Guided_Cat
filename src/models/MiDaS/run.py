@@ -3,7 +3,7 @@
 import os
 import glob
 import torch
-import utils
+from .utils import *
 import cv2
 import argparse
 import time
@@ -11,9 +11,11 @@ import time
 import numpy as np
 
 from imutils.video import VideoStream
-from midas.model_loader import default_models, load_model
+from .midas.model_loader import default_models, load_model
 
 first_execution = True
+
+
 def process(device, model, model_type, image, input_size, target_size, optimize, use_camera):
     """
     Run the inference and interpolate.
@@ -275,3 +277,7 @@ if __name__ == "__main__":
     # compute depth maps
     run(args.input_path, args.output_path, args.model_weights, args.model_type, args.optimize, args.side, args.height,
         args.square, args.grayscale)
+
+
+    #def run(input_path, output_path, model_path, model_type="dpt_beit_large_512", optimize=False, side=False, height=None,
+            #square=False, grayscale=False):

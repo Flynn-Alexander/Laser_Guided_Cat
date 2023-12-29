@@ -1,0 +1,4 @@
+Focal Length: fx = 1439.058594, fy = 1437.825369
+Principal Point: cx = 965.957705, cy = 528.668273
+Radial Distortion Coefficients: [0.088240, -0.115808]
+Tangential Distortion Coefficients: [0.000000, 0.000000]
