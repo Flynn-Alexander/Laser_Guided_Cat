@@ -25,11 +25,13 @@ def develop_3D_playground():
     scene_image_rgb = collect_image_frame()
 
     # Load a MiDaS model
-    inverse_depth_map = run_MiDaS_model(scene_image_rgb, device, model, model_type, transform, net_w, net_h, visualise=False, side=True)
+    inverse_depth_map = run_MiDaS_model(scene_image_rgb, device, model, model_type, transform, net_w, net_h, visualise=False, side=False)
 
-    X, Y, Z = convert_depth_map_to_point_cloud(inverse_depth_map)
+    # Generate point cloud data of the static scene
+    pcd = convert_depth_map_to_point_cloud(scene_image_rgb, inverse_depth_map)
 
-    #
+    # Filter the floor plane to establish the 3D playground
+    playground_pcd = filter_ground_plane(pcd)
 
     print('debug')
 

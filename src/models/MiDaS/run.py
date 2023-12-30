@@ -98,6 +98,9 @@ def create_side_by_side(image, depth, grayscale):
     if not grayscale:
         right_side = cv2.applyColorMap(np.uint8(right_side), cv2.COLORMAP_INFERNO)
 
+    # Save the depth_map locally
+    cv2.imwrite('depth_map.png', right_side)
+
     if image is None:
         return right_side
     else:

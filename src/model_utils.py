@@ -104,12 +104,8 @@ def run_MiDaS_model(original_image_rgb,
             image = transform({"image": original_image_rgb / 255})["image"]
 
             # Predict and normalise the depth map
-            depth_map = process(device, model, model_type, image, (net_w, net_h), original_image_rgb.shape[1::-1], optimize, used_camera)
-            content = create_side_by_side(original_image_rgb, depth_map, grayscale)
-            depth_min = depth_map.min()
-            depth_max = depth_map.max()
-            inverse_depth_map = 255 * (depth_map - depth_min) / (depth_max - depth_min)
-            inverse_depth_map *= 3
+            inverse_depth_map = process(device, model, model_type, image, (net_w, net_h), original_image_rgb.shape[1::-1], optimize, used_camera)
+            content = create_side_by_side(original_image_rgb, inverse_depth_map, grayscale)
 
             # visualise results
             if visualise or side:
