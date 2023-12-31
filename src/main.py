@@ -5,33 +5,42 @@ from project_utils import *
 import argparse
 import torch
 import os
+from PIL import Image
+from models.ZoeDepth.zoedepth.utils.misc import colorize
 
 
-def develop_3D_playground():
+def develop_3D_playground(depth_model='MiDaS'):
     """
     This function is used to develop the 3D playground (scene).
 
     Args:
+        depth_model (str): depth estimation model to use (MiDaS or ZoeDepth)
 
     Returns:
 
     """
 
-    # Initialise MiDaS model parameters
-    device, model, model_type, transform, net_w, net_h = initialise_MiDaS_model()
+    # Initialise model parameters
+    if depth_model == 'MiDaS':
+        device, model, model_type, transform, net_w, net_h = initialise_MiDaS_model()     # MiDaS
+    elif depth_model == 'ZoeDepth':
+        zoe = initialise_ZoeDepth_model()
 
     # Collect an image frame
     print('\nDeveloping 3D Playground (Scene)...')
-    scene_image_rgb = collect_image_frame()
+    rgb_image = collect_image_frame()
 
-    # Load a MiDaS model
-    inverse_depth_map = run_MiDaS_model(scene_image_rgb, device, model, model_type, transform, net_w, net_h, visualise=False, side=False)
-
-    # Generate point cloud data of the static scene
-    pcd = convert_depth_map_to_point_cloud(scene_image_rgb, inverse_depth_map)
+    # Run the model
+    if depth_model == 'MiDaS':
+        inverse_depth_map = run_MiDaS_model(rgb_image, device, model, model_type, transform, net_w, net_h, visualise=False, side=False)
+        pcd = convert_depth_map_to_point_cloud(rgb_image, inverse_depth_map, depth_model='MiDaS')    # Generate point cloud data of the static scene
+    elif depth_model == 'ZoeDepth':
+        image = Image.fromarray(rgb_image)
+        depth_map = zoe.infer_pil(image)
+        pcd = convert_depth_map_to_point_cloud(rgb_image, depth_map, depth_model='ZoeDepth', visualise=True)  # Generate point cloud data of the static scene
 
     # Filter the floor plane to establish the 3D playground
-    playground_pcd = filter_ground_plane(pcd)
+    floor_binary_map = filter_ground_plane(pcd, rgb_image, visualise=True)
 
     print('debug')
 
@@ -43,8 +52,9 @@ if __name__ == "__main__":
     #                         'from camera)'
     #                    )
 
-    # Load a MiDaS model
-    develop_3D_playground()
+    # Develop a 3D playground (scene)
+    #develop_3D_playground("MiDaS")
+    develop_3D_playground("ZoeDepth")
 
     # Load a YOLO model
     #model = YOLO("models/YOLO/yolov8n-pose.pt")  # load a pretrained model (recommended for training)

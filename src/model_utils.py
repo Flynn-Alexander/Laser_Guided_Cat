@@ -67,7 +67,7 @@ def initialise_MiDaS_model():
     return device, model, model_type, transform, net_w, net_h
 
 
-def run_MiDaS_model(original_image_rgb,
+def run_MiDaS_model(rgb_image,
                     device,
                     model,
                     model_type,
@@ -84,7 +84,7 @@ def run_MiDaS_model(original_image_rgb,
     Convert one RGB image to a depth map using a MiDaS model
 
     Args:
-        original_image_rgb (np.array): RGB image to input into forward pass of MiDaS model
+        rgb_image (np.array): RGB image to input into forward pass of MiDaS model
         device (torch.device): device to run the model on
         model (torch.nn.Module): MiDaS model
         model_type (str): the type of the model to be loaded
@@ -99,13 +99,13 @@ def run_MiDaS_model(original_image_rgb,
     """
 
     with torch.no_grad():
-        if original_image_rgb is not None:
+        if rgb_image is not None:
             # Apply transformations to the input image (resizing)
-            image = transform({"image": original_image_rgb / 255})["image"]
+            image = transform({"image": rgb_image / 255})["image"]
 
             # Predict and normalise the depth map
-            inverse_depth_map = process(device, model, model_type, image, (net_w, net_h), original_image_rgb.shape[1::-1], optimize, used_camera)
-            content = create_side_by_side(original_image_rgb, inverse_depth_map, grayscale)
+            inverse_depth_map = process(device, model, model_type, image, (net_w, net_h), rgb_image.shape[1::-1], optimize, used_camera)
+            content = create_side_by_side(rgb_image, inverse_depth_map, grayscale)
 
             # visualise results
             if visualise or side:
@@ -118,3 +118,17 @@ def run_MiDaS_model(original_image_rgb,
             sys.exit()
 
     return inverse_depth_map
+
+
+def initialise_ZoeDepth_model():
+    """
+    Initialise ZoeDepth model parameters
+
+    Returns:
+        model_zoe_nk (torch.nn.Module): ZoeDepth model
+    """
+
+    repo = "isl-org/ZoeDepth"
+    model_zoe_nk = torch.hub.load(repo, "ZoeD_NK", pretrained=True)  # ZoeDepth
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    return model_zoe_nk.to(device)

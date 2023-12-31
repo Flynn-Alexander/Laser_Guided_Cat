@@ -6,13 +6,13 @@ name = "pypi"
 [packages]
 numpy = "*"
 matplotlib = "*"
-torch = "*"
 pandas = "*"
 tqdm = "*"
 ultralytics = "*"
 importlib-resources = "*"
 zipp = "*"
 timm = "==0.6.7"
+torch = "==2.0.1"
 
 [dev-packages]
 
