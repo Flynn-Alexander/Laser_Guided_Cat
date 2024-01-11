@@ -27,7 +27,7 @@ def develop_3D_playground(depth_model='MiDaS'):
         zoe = initialise_ZoeDepth_model()
 
     # Collect an image frame
-    print('\nDeveloping 3D Playground (Scene)...')
+    print('\nDeveloping 3D Playground (parameterised floor scene)...')
     rgb_image = collect_image_frame()
 
     # Run the model
@@ -40,9 +40,10 @@ def develop_3D_playground(depth_model='MiDaS'):
         pcd = convert_depth_map_to_point_cloud(rgb_image, depth_map, depth_model='ZoeDepth', visualise=True)  # Generate point cloud data of the static scene
 
     # Filter the floor plane to establish the 3D playground
-    floor_binary_map = filter_ground_plane(pcd, rgb_image, visualise=True)
+    rotation, inv_rotation, translation, alpha_shape = isolate_ground_plane(pcd, rgb_image, visualise=True)
 
-    print('debug')
+    return rotation, inv_rotation, translation, alpha_shape
+
 
 if __name__ == "__main__":
     #parser = argparse.ArgumentParser()
@@ -52,9 +53,9 @@ if __name__ == "__main__":
     #                         'from camera)'
     #                    )
 
-    # Develop a 3D playground (scene)
-    #develop_3D_playground("MiDaS")
-    develop_3D_playground("ZoeDepth")
+    # Develop a 3D playground (parameterised floor scene)
+    # rotation, inv_rotation, translation, alpha_shape = develop_3D_playground("MiDaS")
+    rotation, inv_rotation, translation, alpha_shape = develop_3D_playground("ZoeDepth")
 
     # Load a YOLO model
     #model = YOLO("models/YOLO/yolov8n-pose.pt")  # load a pretrained model (recommended for training)

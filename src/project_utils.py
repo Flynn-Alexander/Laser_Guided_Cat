@@ -10,6 +10,8 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from scipy.spatial.transform import Rotation as R
+from scipy.spatial import ConvexHull
+import alphashape
 
 # Hardcoded intrinsic parameters (Macbook Webcam)
 fx = 1439.058594
@@ -24,6 +26,12 @@ camera_intrinsics = o3d.camera.PinholeCameraIntrinsic(width, height, fx, fy, cx,
 def onclick(event):
     ix, iy = event.xdata, event.ydata
     print(f'x = {int(ix)}, y = {int(iy)}')
+
+
+class MyCustomError(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
 
 
 def capture_photos(save_dir, interval=5, total_photos=40):
@@ -134,7 +142,11 @@ def convert_depth_map_to_point_cloud(rgb_image, depth_map, depth_model, visualis
 
     # Visualize the point cloud
     if visualise:
-        #display_depth_map_with_colorbar(depth_map)
+        # Plot the depth map
+        if True:
+            display_depth_map_with_colorbar(depth_map)
+
+        # Plot the point cloud
         if True:    # plot using O3D
             o3d.visualization.draw_geometries([pcd])
         else:   # plot using matplotlib
@@ -155,7 +167,7 @@ def convert_depth_map_to_point_cloud(rgb_image, depth_map, depth_model, visualis
     return pcd
 
 
-def filter_ground_plane(pcd, rgb_image, visualise=False):
+def isolate_ground_plane(pcd, rgb_image, visualise=False):
     """
     Filter the ground plane from the point cloud.
 
@@ -175,65 +187,174 @@ def filter_ground_plane(pcd, rgb_image, visualise=False):
     rotation_angle = np.arccos(np.dot(plane_normal, y_normal))
     rotation_vector = rotation_axis_normalized * rotation_angle
     rotation = R.from_rotvec(rotation_vector).as_matrix()
+    inv_rotation = np.linalg.inv(rotation)
+
+    # Generate a new rotated point cloud
+    rotated_pcd = pcd.rotate(rotation, center=(0, 0, 0))
+    """
     points = np.asarray(pcd.points)
     rotated_points = np.dot(points, rotation.T)
-    rotated_points[:, 2] = -rotated_points[:, 2]
+    rotated_points[:, 2] = -rotated_points[:, 2] # flip the Z axis
     rotated_pcd = o3d.geometry.PointCloud()
     rotated_pcd.points = o3d.utility.Vector3dVector(rotated_points)
+    """
 
-    sample = rotated_points[np.random.choice(points.shape[0], 10000), :]
+    # Determine the translation required to align the floor plane with the XZ plane
+    rotated_floor_pcd = rotated_pcd.select_by_index(inliers)
+    rotated_floor_points = np.asarray(rotated_floor_pcd.points)
+    translation = -np.mean(rotated_floor_points[:, 1])
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(sample[:, 0], sample[:, 1], sample[:, 2], s=1)
-    ax.set_xlabel('X Axis')
-    ax.set_ylabel('Y Axis')
-    ax.set_zlabel('Z Axis')
-    ax.set_title('3D Point Cloud')
-
-    plt.show()
-
-    floor = rotated_pcd.select_by_index(inliers)
-    objects = rotated_pcd.select_by_index(inliers, invert=True)
-    #TODO implement rotation and translation, a 2D view of the floor plane and its transformation back to the pixel space.
-
-    # Extract inliers and outliers
-    #floor = pcd.select_by_index(inliers)
-    #objects = pcd.select_by_index(inliers, invert=True)
-
-    # Visualize the results
-    floor.paint_uniform_color([1, 0, 0])  # Floor in red
-    objects.paint_uniform_color([0, 1, 0])  # Remaining objects in green
+    # Determine the alpha shape of the floor plane
+    floor_points_2D = rotated_floor_points[:, [0, 2]]
+    sample = sample_spatial_points(floor_points_2D, 0.05)
+    alpha_shape = alphashape.alphashape(sample, alpha=5)
+    if alpha_shape.geom_type == 'MultiPolygon':
+        MyCustomError("Your Floor Space is split into multiple polygons. Please try again.")
 
     if visualise:
-        #o3d.visualization.draw_geometries([floor, objects])
-        if True:    # plot using O3D
-            o3d.visualization.draw_geometries([floor])
-        else:   # plot using matplotlib
-            points = np.asarray(floor.points)
-            points[:, 2] = -points[:, 2]
-            sample = points[np.random.choice(points.shape[0], 10000), :]
+        # Plot the 3D segmented point clouds
+        if True:
+            floor_pcd = pcd.select_by_index(inliers)
+            objects_pcd = pcd.select_by_index(inliers, invert=True)
+            if True:    # plot using O3D
+                floor_pcd.paint_uniform_color([1, 0, 0])  # Floor in red
+                objects_pcd.paint_uniform_color([0, 1, 0])  # Remaining objects in green
+                o3d.visualization.draw_geometries([floor_pcd, objects_pcd])
+            else:   # plot using matplotlib
+                #points = np.asarray(floor_pcd.points)
+                points = np.asarray(rotated_pcd.points)
+                points[:, 2] = -points[:, 2]
+                sample = points[np.random.choice(points.shape[0], 10000), :]
 
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(sample[:, 0], sample[:, 1], sample[:, 2], s=1)
-            ax.set_xlabel('X Axis')
-            ax.set_ylabel('Y Axis')
-            ax.set_zlabel('Z Axis')
-            ax.set_title('3D Point Cloud')
+                fig = plt.figure()
+                ax = fig.add_subplot(111, projection='3d')
+                ax.scatter(sample[:, 0], sample[:, 1], sample[:, 2], s=1)
+                ax.set_xlabel('X Axis')
+                ax.set_ylabel('Y Axis')
+                ax.set_zlabel('Z Axis')
+                ax.set_title('3D Point Cloud')
 
+                plt.show()
+
+        # Plot the 2D floor plane alpha shape
+        if True:
+            fig, ax = plt.subplots()
+            # Plot the sampled points
+            ax.scatter(*zip(*sample))
+            # Plot the alpha shape
+            if alpha_shape.geom_type == 'Polygon':
+                x, y = alpha_shape.exterior.xy
+                ax.plot(x, y, color="red")  # Red color for the alpha shape
+            elif alpha_shape.geom_type == 'MultiPolygon':
+                for polygon in alpha_shape.geoms:  # Use .geoms to iterate
+                    x, y = polygon.exterior.xy
+                    ax.plot(x, y, color="red")
             plt.show()
 
-    floor_binary_map = pcd_to_pixel_binary_map(floor)
-    # make the rgb image red everywhere the binary map is 1
-    overlayed_rgb_image = rgb_image.copy()
-    overlayed_rgb_image[floor_binary_map == 1] = [255, 0, 0]
-    cv2.imshow('Overlayed RGB Image', overlayed_rgb_image)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        # Plot the projected floor plane on the RGB image
+        if True:
+            # reproject the transformed floor points using the inverse transformation
+            reprojected_floor_points = np.vstack((floor_points_2D[:, 0], np.zeros(floor_points_2D.shape[0]), floor_points_2D[:, 1])).T
+            reprojected_floor_pcd = apply_3D_transformation(reprojected_floor_points, inv_rotation, np.array([0, translation, 0]), inverse_transformation=True)
+            reprojected_floor_binary_map = pcd_to_pixel_binary_map(reprojected_floor_pcd)
+
+            # reproject the alpha shape using the inverse transformation
+            alpha_shape_points = [alpha_shape.exterior.interpolate(distance) for distance in np.arange(0, alpha_shape.length, 0.005)]
+            x_coords = np.array([point.x for point in alpha_shape_points])
+            z_coords = np.array([point.y for point in alpha_shape_points])
+            alpha_shape_points = np.array((x_coords, np.zeros(len(alpha_shape_points)), z_coords)).T
+            alpha_shape_pcd = apply_3D_transformation(alpha_shape_points, inv_rotation, np.array([0, translation, 0]), inverse_transformation=True)
+            alpha_shape_binary_map = pcd_to_pixel_binary_map(alpha_shape_pcd)
+            alpha_shape_binary_map = grow_binary_map(alpha_shape_binary_map, kernel_size=5)
+
+            # recolour the RGB image
+            overlayed_rgb_image = rgb_image.copy()
+            overlayed_rgb_image[reprojected_floor_binary_map == 1] = [255, 0, 0]
+            overlayed_rgb_image[alpha_shape_binary_map == 1] = [0, 0, 255]
+            cv2.imshow('Overlayed RGB Image', overlayed_rgb_image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
+    return rotation, inv_rotation, translation, alpha_shape
 
 
-    return floor_binary_map
+def grow_binary_map(binary_map, kernel_size=3):
+    """
+    Grows a binary map by a specified kernel size.
+
+    Args:
+        binary_map (np.ndarray): binary map to grow
+        kernel_size (int): kernel size to grow the binary map by
+
+    Returns:
+        np.ndarray: grown binary map
+    """
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+    return cv2.dilate(binary_map, kernel, iterations=1)
+
+
+def apply_3D_transformation(points, rotation, translation, inverse_transformation=False):
+    """
+    Apply a transformation to a point cloud.
+
+    Args:
+        points (np.ndarray): point cloud
+        rotation (np.ndarray): rotation matrix
+        translation (np.ndarray): translation vector
+
+    Returns:
+        pcd (open3d.geometry.PointCloud): transformed point cloud
+    """
+
+    # input is np.ndarray
+    if isinstance(points, np.ndarray):
+        if inverse_transformation:     # apply the translation first
+            points += -translation
+            points = np.dot(points, rotation.T)
+        else:       # apply the rotation first
+            points = np.dot(points, rotation)
+            points += translation
+        transformed_pcd = o3d.geometry.PointCloud()
+        transformed_pcd.points = o3d.utility.Vector3dVector(points)
+        return transformed_pcd
+
+    # input is open3d.geometry.PointCloud
+    elif isinstance(points, o3d.geometry.PointCloud):
+        if inverse_transformation:    # apply the translation first
+            points.translate(-translation)
+            points.rotate(rotation.T)
+        else:       # apply the rotation first
+            points.rotate(rotation)
+            points.translate(translation)
+        return points
+
+
+
+def sample_spatial_points(data, grid_size):
+    """
+    Samples points evenly across a spatial dataset.
+
+    Args:
+        data (np.ndarray): spatial dataset
+        grid_size (int): grid size to sample points from
+
+    Returns:
+        np.ndarray: sampled points
+    """
+    # Create grid
+    x_max, y_max = np.max(data, axis=0)
+    x_min, y_min = np.min(data, axis=0)
+    grid_x, grid_y = np.mgrid[x_min:x_max:grid_size, y_min:y_max:grid_size]
+    grid_centers = np.vstack([grid_x.ravel(), grid_y.ravel()]).T
+
+    # Sample closest point to each grid center
+    sampled_points = []
+    for center in grid_centers:
+        distances = np.linalg.norm(data - center, axis=1)
+        closest_point = data[np.argmin(distances)]
+        sampled_points.append(closest_point)
+
+    return np.array(sampled_points)
 
 
 def display_depth_map_with_colorbar(depth_map):
