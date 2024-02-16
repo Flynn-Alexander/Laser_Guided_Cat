@@ -12,6 +12,10 @@ import matplotlib.image as mpimg
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial import ConvexHull
 import alphashape
+from ultralytics import YOLO
+import queue
+import threading
+import time
 
 # Hardcoded intrinsic parameters (Macbook Webcam)
 fx = 1439.058594
@@ -51,7 +55,7 @@ def capture_photos(save_dir, interval=5, total_photos=40):
     cap = cv2.VideoCapture(1)
 
     if not cap.isOpened():
-        print("Error: Camera not accessible")
+        MyCustomError("Error: Camera not accessible")
         return
 
     last_saved_time = time.time()
@@ -72,12 +76,11 @@ def capture_photos(save_dir, interval=5, total_photos=40):
                     cv2.imwrite(file_name, frame)
                     print(f"Captured {file_name}")
 
-                # Break the loop if 'q' is pressed
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                # Break the loop if 'esc' is pressed
+                if cv2.waitKey(1) & 0xFF == ord('\x1b'):
                     break
             else:
-                print("Error: Unable to capture image")
-                break  # Break the loop if frame capture fails
+                MyCustomError("Error: Unable to capture image")
     finally:
         # Release the camera and close the window
         cap.release()
@@ -207,7 +210,7 @@ def isolate_ground_plane(pcd, rgb_image, visualise=False):
     # Determine the alpha shape of the floor plane
     floor_points_2D = rotated_floor_points[:, [0, 2]]
     sample = sample_spatial_points(floor_points_2D, 0.05)
-    alpha_shape = alphashape.alphashape(sample, alpha=5)
+    alpha_shape = alphashape.alphashape(sample, alpha=6)
     if alpha_shape.geom_type == 'MultiPolygon':
         MyCustomError("Your Floor Space is split into multiple polygons. Please try again.")
 
@@ -329,7 +332,6 @@ def apply_3D_transformation(points, rotation, translation, inverse_transformatio
         return points
 
 
-
 def sample_spatial_points(data, grid_size):
     """
     Samples points evenly across a spatial dataset.
@@ -402,6 +404,83 @@ def pcd_to_pixel_binary_map(pcd):
 
     return binary_map
 
+
+class VideoCapture:     # bufferless VideoCapture
+  def __init__(self, source):
+    self.cap = cv2.VideoCapture(source)
+    self.q = queue.Queue()
+    t = threading.Thread(target=self._reader)
+    t.daemon = True
+    t.start()
+
+  # read frames as soon as they are available, keeping only most recent one
+  def _reader(self):
+    while True:
+      ret, frame = self.cap.read()
+      if not ret:
+        break
+      if not self.q.empty():
+        try:
+          self.q.get_nowait()   # discard previous (unprocessed) frame
+        except queue.Empty:
+          pass
+      self.q.put(frame)
+
+  def read(self):
+    return self.q.get()
+
+
+def control_loop(rotation, inv_rotation, translation, alpha_shape):
+    """
+    Estimate the orientation of the subject and instruct the laser to move accordingly.
+
+    Args:
+        rotation (np.ndarray): rotation matrix
+        inv_rotation (np.ndarray): inverse rotation matrix (rotation back to camera space)
+        translation (np.ndarray): translation vector
+        alpha_shape (shapely.geometry.Polygon): alpha shape of the floor plane
+    """
+
+    # Load a YOLO model
+    model = YOLO("models/YOLO/yolov8n-pose.pt")  # load a pretrained pose model
+
+    # Initialise the camera
+    print('\nInitialising Control Loop...')
+    camera = VideoCapture(1)
+    if not camera.cap.isOpened():
+        MyCustomError("Error: Camera not accessible")
+    time.sleep(2)
+
+    # Start the control loop
+    while True:
+        # Read the latest frame from the camera
+        frame = camera.read()
+        #cv2.imshow("frame", frame/255.0)
+        #if cv2.waitKey(1) & 0xFF == ord('\x1b'):
+        #    break
+
+        # Run the YOLO model
+        #results = model(frame)[0]
+        results = model(frame, show=True)[0]
+        keypoints = results.keypoints.xy.numpy()
+
+        for subject_num, subject_type in results.names.items():
+
+
+
+        print('debug')
+
+
+    #results = model.predict(source="1", show=True)  # predict on the webcam stream
+
+class subject:
+    def __init__(self, subject_type, id, department):
+        self.subject_type = subject_type
+        self.id = id
+        self.keypoints = None
+
+    def update_keypoints(self, keypoints):
+        self.keypoints = keypoints
 
 if __name__ == "__main__":
     # Develop a collection of calibration photos

@@ -1,4 +1,3 @@
-from ultralytics import YOLO
 from models.MiDaS.midas.model_loader import default_models, load_model
 from model_utils import *
 from project_utils import *
@@ -55,8 +54,9 @@ if __name__ == "__main__":
 
     # Develop a 3D playground (parameterised floor scene)
     # rotation, inv_rotation, translation, alpha_shape = develop_3D_playground("MiDaS")
-    rotation, inv_rotation, translation, alpha_shape = develop_3D_playground("ZoeDepth")
+    #rotation, inv_rotation, translation, alpha_shape = develop_3D_playground("ZoeDepth")
 
-    # Load a YOLO model
-    #model = YOLO("models/YOLO/yolov8n-pose.pt")  # load a pretrained model (recommended for training)
-    #results = model.predict(source="1", show=True)  # predict on the webcam stream
+    # Start the Control Loop (estimate the orientation of the subject and instruct the laser to move accordingly)
+    rotation = inv_rotation = translation = alpha_shape = None
+    control_loop(rotation, inv_rotation, translation, alpha_shape)
+
